@@ -1,0 +1,97 @@
+---
+title: "Machine Learning Writeup"
+author: "Vishnu Gupta"
+date: "Thursday, May 14, 2015"
+output: html_document
+---
+## Executive Summary
+The purpose of this excercise is to analyse the human activity data and understand in what manner a person excercises. This analysis will be used to create a prediction model and than predict the outcome of the testing set.
+We have a training dataset, which has been partitioned into training (90%) and validation(10%) datasets.
+
+```{r}
+library(caret)
+library(ggplot2)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+set.seed(5108);
+traind<-read.csv("pml-training.csv",header=TRUE);
+setnames<-c(names(traind[grep("_[xyz]$",names(traind))]),"classe")
+```
+## Exploratory Data Analysis
+Get the subset of the data for all x,y and z  measurements
+```{r cache=TRUE}
+train<-subset(traind,select=setnames);
+summary(train);
+```
+
+Based on the analysis several columns have mainly null values these variable doesn't seem to have correlation here. So it does not make sense to use this as predictor. Also it does not make sense to impute the values as almost 90% values will be imputed.
+Get the subset of the data for selected columns.
+
+Training set is biased fit towards classe "A" it has almost 50% more data compared to other class values. We will not take any step to preprocess for this now and build the prediction algorithm
+
+##Create Test data set 
+``` {r}
+testd<-read.csv("pml-testing.csv",header=TRUE);
+setnames<-c(names(traind[grep("_[xyz]$",names(traind))]))
+test<-subset(testd,select=setnames);
+```
+For cross validation purpose we can use a subset of the training data. I created a small training set of 10% of training set for cross validation purpose.
+
+```{r}
+crossval1<-createDataPartition(train$classe,p=0.1,list=FALSE);
+crossval<-train[crossval1,];
+# Final Training data set with 90% of original training set
+trainf<-train[-crossval1,];
+```
+Let us get a view of correlation between predictors with the pairs chart.
+
+``` {r}
+#pairs(trainf);
+
+```
+Fit a random forest model for the training set.
+```{r cache=TRUE}
+fitt<-train(as.factor(trainf$classe)~.,data=trainf,model="rf");
+summary(fitt);
+print(fitt,digits=3)
+#plot(fitt);
+fitt$finalModel
+```
+## Errors
+Accuracy for mtry=2 is 98.5%. Expected in-sample error is 1.5% 
+```{r}
+predre<-predict(fitt,newdata=trainf);
+cm<-confusionMatrix(predre,trainf$classe);
+```
+
+#expected OOB error rate is .89%
+
+```
+## cross validation and Confusion Matrix
+Predict for cross validation sample
+```{r}
+pred<-predict(fitt,newdata=crossval);
+cmc<-confusionMatrix(pred,crossval$classe);
+cmc
+```
+Summary of prediction on cross validation
+```{r}
+summary(pred)
+```
+For cross validation sample set the accuracy is 99.34% that means it has .66% out of sample error with a 95% confidence interval of (0.9887, 0.9965).
+ross validation P-Value [Acc > NIR] is < 2.2e-16 
+
+```{r}
+
+# Confusion matrix shows that the previous prediction model with "rf".
+predfinal<-predict(fitt,newdata=test);
+summary(predfinal)
+pml_write_files(predfinal)
+
+```
